@@ -1,0 +1,22 @@
+{
+    "guardian": {
+        "name": "Иванов Иван",
+        "pin": "12345678901234",
+        "citizenship": "KG",
+        "phone": "+996700000001",
+        "email": "parent1@example.com",
+        "sex": "male",
+        "address": "г. Бишкек, ул. Пример, 1"
+    },
+    "student": {
+        "name": "Иванов Петр",
+        "pin": "98765432109876",
+        "citizenship": "KG",
+        "phone": "+996700000002",
+        "email": "pupil1@example.com",
+        "sex": "male",
+        "birth_date": "2012-09-01",
+        "grade": 7,
+        "class_letter": "А"
+    }
+}
