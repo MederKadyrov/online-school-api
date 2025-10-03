@@ -6,7 +6,10 @@ use Illuminate\Support\ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
 {
-    protected $policies = [ \App\Models\Lesson::class => \App\Policies\LessonPolicy::class ];
+    protected $policies = [
+        \App\Models\Lesson::class => \App\Policies\LessonPolicy::class,
+        \App\Models\Course::class => \App\Policies\CoursePolicy::class,
+    ];
     /**
      * Register services.
      */

@@ -8,13 +8,21 @@ use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Auth\StudentRegisterWizardController;
 use App\Http\Controllers\Teacher\AttendanceController;
 use App\Http\Controllers\Teacher\GradeController;
+use App\Http\Controllers\Teacher\GroupPickController;
 use App\Http\Controllers\Teacher\LessonController;
+use App\Http\Controllers\Teacher\ResourceController;
 use App\Models\EducationalArea;
 use App\Models\Lesson;
 use App\Models\Level;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisterStudentController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Teacher\CourseController as TeacherCourseController;
+use App\Http\Controllers\Teacher\StructureController as TeacherStructureController;
+use App\Http\Controllers\Teacher\AssignmentController as TAssign;
+use App\Http\Controllers\Student\AssignmentSubmissionController as SSubmit;
+use App\Http\Controllers\Teacher\QuizController as TQuiz;
+use App\Http\Controllers\Student\QuizController as SQuiz;
 
 
 // Вариант: только админ/сотрудник может регистрировать
@@ -61,7 +69,6 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
     // только admin/staff
     Route::middleware('role:admin|staff')->group(function () {
         // Subjects
-        Route::get   ('/subjects',          [SubjectController::class,'index']);
         Route::post  ('/subjects',          [SubjectController::class,'store']);
         Route::get   ('/subjects/{subject}',[SubjectController::class,'show']);
         Route::put   ('/subjects/{subject}',[SubjectController::class,'update']);
@@ -129,6 +136,102 @@ Route::middleware('auth:sanctum')->get('/student/lessons', function (Request $r)
 
     return $q->orderBy('starts_at')->paginate(20);
 });
+
+Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(function () {
+    // Курсы
+    Route::get ('/courses',               [TeacherCourseController::class, 'index']);
+    Route::post('/courses',               [TeacherCourseController::class, 'store']);
+    Route::get ('/courses/{course}',      [TeacherCourseController::class, 'show'])->can('manage','course');
+    Route::put ('/courses/{course}',      [TeacherCourseController::class, 'update'])->can('manage','course');
+    Route::delete('/courses/{course}',    [TeacherCourseController::class, 'destroy'])->can('manage','course');
+
+    // Привязка к группам
+    Route::post('/courses/{course}/groups-sync', [TeacherCourseController::class,'syncGroups'])->can('manage','course');
+
+    // Структура: модули/главы/параграфы/ресурсы (минимум)
+    Route::post('/courses/{course}/modules',         [TeacherStructureController::class,'createModule'])->can('manage','course');
+
+//    Route::post('/paragraphs/{paragraph}/resources', [TeacherStructureController::class,'createResource']);
+
+    Route::post('/modules/{module}/reorder',         [TeacherStructureController::class,'reorderChapters']);
+
+    Route::get ('/modules/{module}/chapters',        [TeacherStructureController::class,'listChapters']);
+    Route::post('/modules/{module}/chapters',        [TeacherStructureController::class,'createChapter']);
+
+    Route::post('/chapters/{chapter}/paragraphs',    [TeacherStructureController::class,'createParagraph']);
+    Route::get ('/chapters/{chapter}/paragraphs',    [TeacherStructureController::class,'listParagraphs']);
+
+    Route::post('/chapters/{chapter}/reorder',       [TeacherStructureController::class,'reorderParagraphs']);
+    Route::put   ('/chapters/{chapter}',             [TeacherStructureController::class,'updateChapter']);
+    Route::delete('/chapters/{chapter}',             [TeacherStructureController::class,'destroyChapter']);
+
+    Route::put   ('/paragraphs/{paragraph}',         [TeacherStructureController::class,'updateParagraph']);
+    Route::delete('/paragraphs/{paragraph}',         [TeacherStructureController::class,'destroyParagraph']);
+
+    Route::post('/paragraphs/{paragraph}/reorder',   [TeacherStructureController::class,'reorderResources']);
+
+    Route::get('/groups', [GroupPickController::class, 'index']);
+    Route::post('/courses/{course}/groups-sync', [\App\Http\Controllers\Teacher\CourseController::class,'syncGroups'])
+        ->can('manage','course');
+
+    // CRUD ресурсов
+//    Route::post('/paragraphs/{paragraph}/resources', [TeacherStructureController::class,'createResource']);
+
+    Route::post   ('/paragraphs/{paragraph}/resources',      [ResourceController::class,'store']);
+    Route::get    ('/paragraphs/{paragraph}/resources',      [ResourceController::class,'index']);
+    Route::put    ('/resources/{resource}',                  [ResourceController::class,'update']);
+    Route::delete ('/resources/{resource}',                  [ResourceController::class,'destroy']);
+
+    // Загрузка файла и превью
+    Route::post   ('/upload/resource-file',                  [ResourceController::class,'uploadFile']);
+
+    //    Задания
+    Route::post('/paragraphs/{paragraph}/assignments',   [TAssign::class,'store']);
+    Route::get ('/assignments/{assignment}',             [TAssign::class,'show']);
+    Route::put ('/assignments/{assignment}',             [TAssign::class,'update']);
+    Route::post('/assignments/{assignment}/publish',     [TAssign::class,'publish']);
+
+    Route::get ('/assignments/{assignment}/submissions', [TAssign::class,'submissions']);
+    Route::put ('/submissions/{submission}/grade',       [TAssign::class,'grade']);
+
+    Route::post('/upload/assignment-attachment',         [TAssign::class,'uploadAttachment']);
+
+    //    Тесты
+    Route::post('/paragraphs/{paragraph}/quizzes',        [TQuiz::class,'store']);
+    Route::get ('/quizzes/{quiz}',                        [TQuiz::class,'show']);
+    Route::put ('/quizzes/{quiz}',                        [TQuiz::class,'update']);
+    Route::post('/quizzes/{quiz}/publish',                [TQuiz::class,'publish']);
+
+    Route::post('/quizzes/{quiz}/questions',              [TQuiz::class,'addQuestion']);
+    Route::put ('/questions/{question}',                  [TQuiz::class,'updateQuestion']);
+    Route::delete('/questions/{question}',                [TQuiz::class,'destroyQuestion']);
+
+    Route::post('/questions/{question}/options',          [TQuiz::class,'addOption']);
+    Route::put ('/options/{option}',                      [TQuiz::class,'updateOption']);
+    Route::delete('/options/{option}',                    [TQuiz::class,'destroyOption']);
+
+    //    редактирование заданий
+    Route::delete('/assignments/{assignment}', [TAssign::class,'destroy']);      // удаление
+    Route::get('/paragraphs/{paragraph}/assignment', [TAssign::class,'byParagraph']); // получить задание параграфа (если есть)
+
+    Route::get('/paragraphs/{paragraph}/quiz', [TQuiz::class,'byParagraph']);
+});
+
+Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(function () {
+    Route::get ('/paragraphs/{paragraph}/assignments',   [SSubmit::class,'listForParagraph']);
+    Route::get ('/assignments/{assignment}/my',          [SSubmit::class,'mySubmission']);
+    Route::post('/assignments/{assignment}/submit',      [SSubmit::class,'submit']); // multipart или JSON
+
+    //    Тесты
+    Route::get ('/paragraphs/{paragraph}/quiz',           [SQuiz::class,'getQuiz']);         // если опубликован
+    Route::post('/quizzes/{quiz}/start',                  [SQuiz::class,'start']);
+    Route::post('/attempts/{attempt}/answer',             [SQuiz::class,'answer']);          // по одному вопросу
+    Route::post('/attempts/{attempt}/finish',             [SQuiz::class,'finish']);          // автопроверка
+    Route::get ('/quizzes/{quiz}/my-attempts',            [SQuiz::class,'myAttempts']);
+});
+
+Route::get   ('/admin/subjects',          [SubjectController::class,'index']);
+
 
 Route::post('/auth/login', [LoginController::class,'login']);
 Route::middleware('auth:sanctum')->get('/auth/me', [LoginController::class,'me']);

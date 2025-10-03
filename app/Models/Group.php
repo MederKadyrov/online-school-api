@@ -33,5 +33,9 @@ class Group extends Model {
         return trim(implode(' ', array_filter([$u->last_name, $u->first_name, $u->middle_name])));
     }
 
+    public function courses() {
+        return $this->belongsToMany(Course::class, 'course_group')->withTimestamps();
+    }
+
 }
 
