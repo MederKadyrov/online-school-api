@@ -17,7 +17,7 @@ class AssignmentSubmissionController extends Controller
 
     public function listForParagraph(Request $r, Paragraph $paragraph) {
         // Показываем только опубликованные
-        $assignments = $paragraph->assignments()->where('status','published')
+        $assignments = $paragraph->assignment()->where('status','published')
             ->orderBy('id','desc')->get(['id','title','instructions','due_at','max_points','attachments_path']);
         return $assignments;
     }

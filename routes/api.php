@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\GroupStudentsController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SubjectController;
 use App\Http\Controllers\Admin\TeacherController;
+use App\Http\Controllers\Admin\GroupCourseController;
 use App\Http\Controllers\Auth\StudentRegisterWizardController;
 use App\Http\Controllers\Teacher\AttendanceController;
 use App\Http\Controllers\Teacher\GradeController;
@@ -23,6 +24,8 @@ use App\Http\Controllers\Teacher\AssignmentController as TAssign;
 use App\Http\Controllers\Student\AssignmentSubmissionController as SSubmit;
 use App\Http\Controllers\Teacher\QuizController as TQuiz;
 use App\Http\Controllers\Student\QuizController as SQuiz;
+use App\Http\Controllers\Student\CourseController as SCourse;
+use App\Http\Controllers\Student\ResourceController as SResource;
 
 
 // Вариант: только админ/сотрудник может регистрировать
@@ -121,6 +124,9 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
             EducationalArea::orderBy('name')->get(['id','name','code'])
         );
 
+        Route::get('/groups/{group}/courses', [GroupCourseController::class, 'index']);
+        Route::post('/groups/{group}/courses-sync', [GroupCourseController::class, 'sync']);
+
     });
 });
 
@@ -138,6 +144,10 @@ Route::middleware('auth:sanctum')->get('/student/lessons', function (Request $r)
 });
 
 Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(function () {
+
+    Route::get('/subjects', [TeacherCourseController::class, 'mySubjects']);
+
+
     // Курсы
     Route::get ('/courses',               [TeacherCourseController::class, 'index']);
     Route::post('/courses',               [TeacherCourseController::class, 'store']);
@@ -218,6 +228,12 @@ Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(fun
 });
 
 Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(function () {
+
+    Route::get('/courses', [SCourse::class, 'index']);
+    Route::get('/courses/{course}', [SCourse::class, 'show']);
+
+    Route::get('/paragraphs/{paragraph}/resources', [SResource::class, 'index']);
+
     Route::get ('/paragraphs/{paragraph}/assignments',   [SSubmit::class,'listForParagraph']);
     Route::get ('/assignments/{assignment}/my',          [SSubmit::class,'mySubmission']);
     Route::post('/assignments/{assignment}/submit',      [SSubmit::class,'submit']); // multipart или JSON
@@ -236,4 +252,3 @@ Route::get   ('/admin/subjects',          [SubjectController::class,'index']);
 Route::post('/auth/login', [LoginController::class,'login']);
 Route::middleware('auth:sanctum')->get('/auth/me', [LoginController::class,'me']);
 Route::middleware('auth:sanctum')->post('/auth/logout', [LoginController::class,'logout']);
-

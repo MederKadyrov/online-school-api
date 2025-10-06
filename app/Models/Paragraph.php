@@ -10,7 +10,11 @@ class Paragraph extends Model
 
     public function chapter()   { return $this->belongsTo(Chapter::class); }
     public function resources() { return $this->hasMany(Resource::class)->orderBy('position'); }
-    public function assignments(){ return $this->hasMany(Assignment::class); }
+
+    public function assignment()
+    {
+        return $this->hasOne(Assignment::class);
+    }
     public function quiz()
     {
         return $this->hasOne(Quiz::class);

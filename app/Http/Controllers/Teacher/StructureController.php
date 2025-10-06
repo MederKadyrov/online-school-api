@@ -218,10 +218,38 @@ class StructureController extends Controller
     public function listParagraphs(\Illuminate\Http\Request $r, \App\Models\Chapter $chapter)
     {
         $this->authorize('manage', $chapter->module->course);
+
         $items = $chapter->paragraphs()
-            ->orderBy('position')->orderBy('number')
-            ->get(['id','chapter_id','number','position','title','description']);
-        return $items;
+            ->withCount('resources') // посчитаем количество ресурсов
+            ->withExists([
+                'assignment as has_assignment', // проверим наличие задания
+                'quiz as has_quiz',             // проверим наличие теста
+            ])
+            ->orderBy('position')
+            ->orderBy('number')
+            ->get([
+                'id',
+                'chapter_id',
+                'number',
+                'position',
+                'title',
+                'description'
+            ])
+            ->map(function ($p) {
+                return [
+                    'id'               => $p->id,
+                    'chapter_id'       => $p->chapter_id,
+                    'number'           => $p->number,
+                    'position'         => $p->position,
+                    'title'            => $p->title,
+                    'description'      => $p->description,
+                    'resources_count'  => (int) $p->resources_count,
+                    'has_assignment'   => (bool) $p->has_assignment,
+                    'has_quiz'         => (bool) $p->has_quiz,
+                ];
+            });
+
+        return response()->json($items);
     }
 
     public function updateChapter(\Illuminate\Http\Request $r, \App\Models\Chapter $chapter)

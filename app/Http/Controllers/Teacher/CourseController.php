@@ -44,6 +44,10 @@ class CourseController extends Controller
 
         $teacherId = $r->user()->teacher->id;
 
+        $allowed = $r->user()->teacher->subjects()->where('subjects.id', $data['subject_id'])->exists();
+        abort_unless($allowed, 403, 'Subject not assigned to teacher');
+
+
         return DB::transaction(function () use ($data, $teacherId) {
             // title по умолчанию: "<Предмет>, <N> класс"
             if (empty($data['title'])) {
@@ -138,6 +142,15 @@ class CourseController extends Controller
 
         $course->groups()->sync($data['group_ids']);
         return response()->json(['message'=>'ok']);
+    }
+
+    public function mySubjects(Request $r) 
+    { 
+        $teacher = $r->user()->teacher; 
+        return $teacher?->subjects()
+            ->select('subjects.id','subjects.name','subjects.code')
+            ->orderBy('subjects.name')
+            ->get();
     }
 }
 

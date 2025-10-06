@@ -115,7 +115,7 @@ class AssignmentController extends Controller
     public function byParagraph(Request $r, Paragraph $paragraph)
     {
         $this->authorizeParagraphOwner($paragraph, $r);
-        $asg = $paragraph->assignments()->orderByDesc('id')->first(); // у нас unique, но на всякий случай
+        $asg = $paragraph->assignment()->orderByDesc('id')->first(); // у нас unique, но на всякий случай
         return $asg ?: response()->json(null);
     }
 
