@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SubjectController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\GroupCourseController;
+use App\Http\Controllers\Admin\SubmissionController as AdminSubmission;
 use App\Http\Controllers\Auth\StudentRegisterWizardController;
 use App\Http\Controllers\Teacher\AttendanceController;
 use App\Http\Controllers\Teacher\GradeController;
@@ -127,6 +128,11 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::get('/groups/{group}/courses', [GroupCourseController::class, 'index']);
         Route::post('/groups/{group}/courses-sync', [GroupCourseController::class, 'sync']);
 
+        // Работы студентов (для мониторинга учителей)
+        Route::get('/submissions', [AdminSubmission::class, 'index']);
+        Route::get('/submissions/courses', [AdminSubmission::class, 'courses']);
+        Route::get('/submissions/teachers', [AdminSubmission::class, 'teachers']);
+
     });
 });
 
@@ -200,9 +206,11 @@ Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(fun
     Route::get ('/assignments/{assignment}',             [TAssign::class,'show']);
     Route::put ('/assignments/{assignment}',             [TAssign::class,'update']);
     Route::post('/assignments/{assignment}/publish',     [TAssign::class,'publish']);
+    Route::get ('/courses/{course}/assignments',         [TAssign::class,'assignmentsByCourse']);
 
     Route::get ('/assignments/{assignment}/submissions', [TAssign::class,'submissions']);
     Route::put ('/submissions/{submission}/grade',       [TAssign::class,'grade']);
+    Route::get ('/submissions',                          [TAssign::class,'allSubmissions']);
 
     Route::post('/upload/assignment-attachment',         [TAssign::class,'uploadAttachment']);
 

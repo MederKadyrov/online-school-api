@@ -64,10 +64,16 @@ class QuizController extends Controller
         return $quiz->fresh();
     }
 
+    private function recalculateMaxPoints(Quiz $quiz) {
+        $sum = (int) $quiz->questions()->sum('points');
+        $quiz->update(['max_points' => $sum]);
+        return $sum;
+    }
+
     public function publish(Request $r, Quiz $quiz) {
         $this->authorizeQuiz($quiz);
-        $sum = (int) $quiz->questions()->sum('points');
-        $quiz->update(['status'=>'published', 'max_points'=>$sum]);
+        $sum = $this->recalculateMaxPoints($quiz);
+        $quiz->update(['status'=>'published']);
         return ['message'=>'ok', 'max_points'=>$sum];
     }
 
@@ -86,6 +92,7 @@ class QuizController extends Controller
             'points'   => $data['points'] ?? 1,
             'position' => $pos,
         ]);
+        $this->recalculateMaxPoints($quiz);
         return response()->json($q, 201);
     }
 
@@ -96,6 +103,9 @@ class QuizController extends Controller
             'points' => 'sometimes|integer|min:1|max:100',
         ]);
         $question->update($data);
+        if (isset($data['points'])) {
+            $this->recalculateMaxPoints($question->quiz);
+        }
         return $question->fresh()->load('options');
     }
 
@@ -111,6 +121,7 @@ class QuizController extends Controller
                 QuizQuestion::where('id',$id)->update(['position'=>$pos++]);
             }
         });
+        $this->recalculateMaxPoints($quiz);
         return ['message'=>'deleted'];
     }
 

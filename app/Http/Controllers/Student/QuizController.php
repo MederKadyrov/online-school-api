@@ -24,14 +24,47 @@ class QuizController extends Controller
     public function getQuiz(Request $r, Paragraph $paragraph) {
         $quiz = $paragraph->quiz()->where('status','published')->first();
         if (!$quiz) return response()->json(null);
-        $q = $quiz->load(['questions.options' => fn($x)=>$x->orderBy('position')])
-            ->load(['questions'=> fn($x)=>$x->orderBy('position')]);
-        // Шафл по желанию
+
+        $questions = $quiz->questions()
+            ->orderBy('position')
+            ->with(['options' => fn($q) => $q->orderBy('position')])
+            ->get();
+
         if ($quiz->shuffle) {
-            $q->questions = $q->questions->shuffle()->values();
-            foreach ($q->questions as $qq) $qq->options = $qq->options->shuffle()->values();
+            $questions = $questions->shuffle()->values();
+            $questions->transform(function ($qq) {
+                $qq->setRelation('options', $qq->options->shuffle()->values());
+                return $qq;
+            });
         }
-        return $q;
+
+        $payload = [
+            'id'             => $quiz->id,
+            'title'          => $quiz->title,
+            'instructions'   => $quiz->instructions,
+            'time_limit_sec' => $quiz->time_limit_sec,
+            'max_attempts'   => $quiz->max_attempts,
+            'shuffle'        => (bool) $quiz->shuffle,
+            'max_points'     => $quiz->max_points,
+            'questions'      => $questions->map(function($q){
+                return [
+                    'id'       => $q->id,
+                    'type'     => $q->type,
+                    'text'     => $q->text,
+                    'points'   => (int) $q->points,
+                    'position' => (int) $q->position,
+                    'options'  => in_array($q->type, ['single','multiple'])
+                        ? $q->options->map(fn($o) => [
+                            'id'       => $o->id,
+                            'text'     => $o->text,
+                            'position' => (int) $o->position,
+                        ])->values()
+                        : [],
+                ];
+            })->values(),
+        ];
+
+        return response()->json($payload);
     }
 
     public function start(Request $r, Quiz $quiz) {
@@ -90,21 +123,36 @@ class QuizController extends Controller
         $quiz = $attempt->quiz()->with(['questions.options'])->first();
         $answers = $attempt->answers()->get()->keyBy('question_id');
 
-        DB::transaction(function() use ($attempt, $quiz, $answers) {
+        $correct = 0;
+        $wrong = 0;
+        $unanswered = 0;
+
+        DB::transaction(function() use ($attempt, $quiz, $answers, &$correct, &$wrong, &$unanswered) {
             $score = 0;
 
             foreach ($quiz->questions as $q) {
                 $ans = $answers->get($q->id);
-                if (!$ans) continue;
+                if (!$ans) {
+                    if (in_array($q->type, ['single','multiple'])) {
+                        $unanswered++;
+                    }
+                    continue;
+                }
 
                 if (in_array($q->type, ['single','multiple'])) {
-                    $correct = $q->options->where('is_correct', true)->pluck('id')->sort()->values();
+                    $correctIds = $q->options->where('is_correct', true)->pluck('id')->sort()->values();
                     $selected = collect($ans->selected_option_ids ?? [])->sort()->values();
-                    $isRight = $correct->count() > 0 && $correct->toJson() === $selected->toJson();
+                    $isRight = $correctIds->count() > 0 && $correctIds->toJson() === $selected->toJson();
                     $auto = $isRight ? $q->points : 0;
                     $ans->auto_score = $auto;
                     $ans->save();
                     $score += $auto;
+
+                    if ($selected->isEmpty()) {
+                        $unanswered++;
+                    } else {
+                        $isRight ? $correct++ : $wrong++;
+                    }
                 } else {
                     $ans->auto_score = 0; // текст — вручную если потребуется
                     $ans->save();
@@ -119,7 +167,10 @@ class QuizController extends Controller
             $attempt->save();
         });
 
-        return $attempt->fresh();
+        $attempt->setAttribute('correct_count', $correct);
+        $attempt->setAttribute('wrong_count', $wrong);
+        $attempt->setAttribute('unanswered_count', $unanswered);
+        return $attempt;
     }
 
     public function myAttempts(Request $r, Quiz $quiz) {
