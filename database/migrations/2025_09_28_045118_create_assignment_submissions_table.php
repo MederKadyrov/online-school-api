@@ -15,6 +15,7 @@ return new class extends Migration
             $t->id();
             $t->foreignId('assignment_id')->constrained()->cascadeOnDelete();
             $t->foreignId('student_id')->constrained()->cascadeOnDelete();
+            $t->foreignId('grade_id')->nullable()->constrained()->nullOnDelete();
             $t->longText('text_answer')->nullable();
             $t->string('file_path')->nullable();
             $t->timestamp('submitted_at')->nullable();

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Paragraph, Quiz, QuizAttempt, QuizAnswer, QuizQuestion, QuizOption};
+use App\Models\{Paragraph, Quiz, QuizAttempt, QuizAnswer, QuizQuestion, QuizOption, Grade};
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -120,14 +120,14 @@ class QuizController extends Controller
         abort_unless($attempt->student_id === $sid, 403);
         abort_if($attempt->status !== 'in_progress', 403);
 
-        $quiz = $attempt->quiz()->with(['questions.options'])->first();
+        $quiz = $attempt->quiz()->with(['questions.options', 'paragraph.chapter.module'])->first();
         $answers = $attempt->answers()->get()->keyBy('question_id');
 
         $correct = 0;
         $wrong = 0;
         $unanswered = 0;
 
-        DB::transaction(function() use ($attempt, $quiz, $answers, &$correct, &$wrong, &$unanswered) {
+        DB::transaction(function() use ($attempt, $quiz, $answers, &$correct, &$wrong, &$unanswered, $sid) {
             $score = 0;
 
             foreach ($quiz->questions as $q) {
@@ -165,6 +165,26 @@ class QuizController extends Controller
             $attempt->grade_5     = $this->toFiveScale($score, max(1, $quiz->max_points));
             $attempt->status      = $attempt->autograded ? 'graded' : 'submitted';
             $attempt->save();
+
+            // Создаем запись в таблице grades
+            $courseId = $quiz->paragraph->chapter->module->course_id ?? null;
+            if ($courseId) {
+                Grade::updateOrCreate(
+                    [
+                        'student_id' => $sid,
+                        'gradeable_type' => QuizAttempt::class,
+                        'gradeable_id' => $attempt->id,
+                    ],
+                    [
+                        'course_id' => $courseId,
+                        'score' => $score,
+                        'grade_5' => $attempt->grade_5,
+                        'max_points' => $quiz->max_points,
+                        'title' => $quiz->title,
+                        'graded_at' => now(),
+                    ]
+                );
+            }
         });
 
         $attempt->setAttribute('correct_count', $correct);

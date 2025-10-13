@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Assignment, AssignmentSubmission, Paragraph};
+use App\Models\{Assignment, AssignmentSubmission, Paragraph, Grade};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -193,6 +193,31 @@ class AssignmentController extends Controller
             'teacher_comment'=> $data['teacher_comment'] ?? null,
             'status'         => $data['status'] ?? 'returned',
         ]);
+
+        // Создаем/обновляем запись в таблице grades
+        $teacher = $r->user()->teacher;
+        $courseId = $submission->assignment->paragraph->chapter->module->course_id ?? null;
+
+        if ($courseId) {
+            Grade::updateOrCreate(
+                [
+                    'student_id' => $submission->student_id,
+                    'gradeable_type' => AssignmentSubmission::class,
+                    'gradeable_id' => $submission->id,
+                ],
+                [
+                    'course_id' => $courseId,
+                    'teacher_id' => $teacher?->id,
+                    'score' => $data['score'],
+                    'grade_5' => $grade5,
+                    'max_points' => $max,
+                    'title' => $submission->assignment->title,
+                    'teacher_comment' => $data['teacher_comment'] ?? null,
+                    'graded_at' => now(),
+                ]
+            );
+        }
+
         return ['message'=>'ok', 'grade_5'=>$grade5];
     }
 

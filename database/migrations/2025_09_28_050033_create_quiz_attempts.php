@@ -22,6 +22,11 @@ return new class extends Migration
                 ->constrained() // students.id
                 ->cascadeOnDelete();
 
+            $t->foreignId('grade_id')
+                ->nullable()
+                ->constrained() // grades.id
+                ->nullOnDelete();
+
             $t->timestamp('started_at')->nullable();
             $t->timestamp('finished_at')->nullable();
 

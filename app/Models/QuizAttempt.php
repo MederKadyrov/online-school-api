@@ -9,6 +9,7 @@ class QuizAttempt extends Model
     protected $fillable = [
         'quiz_id',
         'student_id',
+        'grade_id',
         'started_at',
         'finished_at',
         'status',       // in_progress | submitted | graded
@@ -28,6 +29,16 @@ class QuizAttempt extends Model
     public function quiz()
     {
         return $this->belongsTo(Quiz::class);
+    }
+
+    public function student()
+    {
+        return $this->belongsTo(Student::class);
+    }
+
+    public function grade()
+    {
+        return $this->belongsTo(Grade::class);
     }
 
     public function answers()

@@ -12,11 +12,11 @@ class LoginController extends Controller
     public function login(Request $request)
     {
         $validated = $request->validate([
-            'email'=>'required|email',
+            'pin'=>'required|string',
             'password'=>'required|string'
         ]);
 
-        $user = User::where('email', $validated['email'])->first();
+        $user = User::where('pin', $validated['pin'])->first();
         if (!$user || !Hash::check($validated['password'], $user->password)) {
             return response()->json(['message'=>'Invalid credentials'], 422);
         }
@@ -29,6 +29,7 @@ class LoginController extends Controller
                 'id'    => $user->id,
                 'name'  => $user->name,
                 'email' => $user->email,
+                'pin'   => $user->pin,
             ],
         ]);
     }

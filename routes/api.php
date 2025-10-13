@@ -54,7 +54,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/student/grades', function (\Illuminate\Http\Request $r) {
         abort_unless(auth()->user()->hasRole('student'), 403);
         $student = auth()->user()->student;
-        $q = \App\Models\Grade::with(['lesson.subject','lesson.group','lesson.teacher.user'])
+        $q = \App\Models\Grade::with(['course.subject','teacher.user','gradeable'])
             ->where('student_id', $student->id)
             ->orderByDesc('graded_at');
         if ($r->filled('from')) $q->where('graded_at','>=',$r->input('from'));
@@ -133,6 +133,13 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::get('/submissions/courses', [AdminSubmission::class, 'courses']);
         Route::get('/submissions/teachers', [AdminSubmission::class, 'teachers']);
 
+        // Журнал оценок
+        Route::get('/journal', [\App\Http\Controllers\Admin\JournalController::class, 'index']);
+        Route::get('/journal/groups', [\App\Http\Controllers\Admin\JournalController::class, 'groups']);
+        Route::get('/journal/courses', [\App\Http\Controllers\Admin\JournalController::class, 'courses']);
+        Route::get('/journal/modules', [\App\Http\Controllers\Admin\JournalController::class, 'modules']);
+        Route::get('/journal/grades/{grade}', [\App\Http\Controllers\Admin\JournalController::class, 'gradeDetails']);
+
     });
 });
 
@@ -201,6 +208,14 @@ Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(fun
     // Загрузка файла и превью
     Route::post   ('/upload/resource-file',                  [ResourceController::class,'uploadFile']);
 
+    // Журнал оценок учителя
+    Route::get('/journal', [\App\Http\Controllers\Teacher\JournalController::class, 'index']);
+    Route::get('/journal/groups', [\App\Http\Controllers\Teacher\JournalController::class, 'groups']);
+    Route::get('/journal/courses', [\App\Http\Controllers\Teacher\JournalController::class, 'courses']);
+    Route::get('/journal/modules', [\App\Http\Controllers\Teacher\JournalController::class, 'modules']);
+    Route::post('/journal/module-grades', [\App\Http\Controllers\Teacher\JournalController::class, 'storeModuleGrade']);
+    Route::delete('/journal/module-grades/{id}', [\App\Http\Controllers\Teacher\JournalController::class, 'deleteModuleGrade']);
+
     //    Задания
     Route::post('/paragraphs/{paragraph}/assignments',   [TAssign::class,'store']);
     Route::get ('/assignments/{assignment}',             [TAssign::class,'show']);
@@ -252,6 +267,11 @@ Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(fun
     Route::post('/attempts/{attempt}/answer',             [SQuiz::class,'answer']);          // по одному вопросу
     Route::post('/attempts/{attempt}/finish',             [SQuiz::class,'finish']);          // автопроверка
     Route::get ('/quizzes/{quiz}/my-attempts',            [SQuiz::class,'myAttempts']);
+
+    // Журнал оценок студента
+    Route::get('/journal', [\App\Http\Controllers\Student\JournalController::class, 'index']);
+    Route::get('/journal/courses', [\App\Http\Controllers\Student\JournalController::class, 'courses']);
+    Route::get('/journal/modules', [\App\Http\Controllers\Student\JournalController::class, 'modules']);
 });
 
 Route::get   ('/admin/subjects',          [SubjectController::class,'index']);
