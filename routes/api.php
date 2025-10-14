@@ -102,6 +102,11 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::put   ('/teachers/{id}',   [TeacherController::class,'update']);
         Route::delete('/teachers/{id}',   [TeacherController::class,'destroy']);
 
+        // Управление паролями пользователей
+        Route::get('/users/passwords', [\App\Http\Controllers\Admin\UserPasswordController::class, 'index']);
+        Route::post('/users/{user}/reset-password', [\App\Http\Controllers\Admin\UserPasswordController::class, 'resetPassword']);
+        Route::post('/users/{user}/set-password', [\App\Http\Controllers\Admin\UserPasswordController::class, 'setPassword']);
+
         Route::get('/levels', function () {
             return Level::orderBy('number')->get(['id','number','title']);
         });
@@ -280,3 +285,7 @@ Route::get   ('/admin/subjects',          [SubjectController::class,'index']);
 Route::post('/auth/login', [LoginController::class,'login']);
 Route::middleware('auth:sanctum')->get('/auth/me', [LoginController::class,'me']);
 Route::middleware('auth:sanctum')->post('/auth/logout', [LoginController::class,'logout']);
+
+// Восстановление пароля
+Route::post('/auth/forgot-password', [\App\Http\Controllers\Auth\ForgotPasswordController::class, 'sendResetCode']);
+Route::post('/auth/reset-password', [\App\Http\Controllers\Auth\ForgotPasswordController::class, 'resetPassword']);
