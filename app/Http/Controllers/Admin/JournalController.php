@@ -312,7 +312,7 @@ class JournalController extends Controller
             'student_name' => $grade->student->user->name,
             'group' => $grade->student->group->display_name,
             'subject' => $grade->course->subject->name,
-            'teacher' => $grade->teacher->user->name,
+            'teacher' => $grade->teacher && $grade->teacher->user ? $grade->teacher->user->name : 'Автоматическая проверка',
             'title' => $grade->title,
             'score' => $grade->score,
             'max_points' => $grade->max_points,

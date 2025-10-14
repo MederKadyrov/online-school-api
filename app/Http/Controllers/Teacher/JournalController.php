@@ -350,6 +350,67 @@ class JournalController extends Controller
     }
 
     /**
+     * Получить детали конкретной оценки
+     */
+    public function gradeDetails(Request $request, $gradeId)
+    {
+        $teacher = Teacher::where('user_id', $request->user()->id)->firstOrFail();
+
+        $grade = Grade::with([
+            'student.user:id,first_name,last_name,middle_name',
+            'student.group.level:id,number',
+            'course.subject:id,name',
+            'teacher.user:id,first_name,last_name,middle_name',
+            'gradeable'
+        ])->findOrFail($gradeId);
+
+        // Проверяем, что оценка принадлежит курсу этого учителя
+        if ($grade->course->teacher_id !== $teacher->id) {
+            abort(403, 'Нет доступа к этой оценке');
+        }
+
+        // Дополнительная информация в зависимости от типа
+        $details = [
+            'id' => $grade->id,
+            'student_name' => $grade->student->user->name,
+            'group' => $grade->student->group->display_name,
+            'subject' => $grade->course->subject->name,
+            'teacher' => $grade->teacher && $grade->teacher->user ? $grade->teacher->user->name : 'Автоматическая проверка',
+            'title' => $grade->title,
+            'score' => $grade->score,
+            'max_points' => $grade->max_points,
+            'grade_5' => $grade->grade_5,
+            'teacher_comment' => $grade->teacher_comment,
+            'graded_at' => $grade->graded_at,
+            'type' => class_basename($grade->gradeable_type),
+        ];
+
+        // Если это тест - добавляем информацию о попытке
+        if ($grade->gradeable instanceof \App\Models\QuizAttempt) {
+            $attempt = $grade->gradeable;
+            $details['quiz'] = [
+                'started_at' => $attempt->started_at,
+                'finished_at' => $attempt->finished_at,
+                'autograded' => $attempt->autograded,
+                'answers_count' => $attempt->answers()->count(),
+            ];
+        }
+
+        // Если это задание - добавляем информацию о сдаче
+        if ($grade->gradeable instanceof \App\Models\AssignmentSubmission) {
+            $submission = $grade->gradeable;
+            $details['assignment'] = [
+                'submitted_at' => $submission->submitted_at,
+                'status' => $submission->status,
+                'has_file' => !empty($submission->file_path),
+                'text_answer' => $submission->text_answer,
+            ];
+        }
+
+        return response()->json($details);
+    }
+
+    /**
      * Конвертировать число в римское
      */
     private function getRomanNumeral($number)
