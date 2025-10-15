@@ -29,13 +29,7 @@ use App\Http\Controllers\Student\CourseController as SCourse;
 use App\Http\Controllers\Student\ResourceController as SResource;
 
 
-// Вариант: только админ/сотрудник может регистрировать
 Route::middleware(['auth:sanctum'])->group(function () {
-
-    // Префлайт-валидация (Шаг 1), НИЧЕГО НЕ СОЗДАЁТ
-    Route::post('/auth/register-student-validate', [StudentRegisterWizardController::class, 'validateOnly']);
-    // Итоговое создание + загрузка документов (Шаг 2)
-    Route::post('/auth/register-student', [StudentRegisterWizardController::class, 'createWithDocuments']);
 
     Route::get('/teacher/lessons', [LessonController::class,'index']);
     Route::post('/teacher/lessons', [LessonController::class,'store']);
@@ -107,9 +101,7 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::post('/users/{user}/reset-password', [\App\Http\Controllers\Admin\UserPasswordController::class, 'resetPassword']);
         Route::post('/users/{user}/set-password', [\App\Http\Controllers\Admin\UserPasswordController::class, 'setPassword']);
 
-        Route::get('/levels', function () {
-            return Level::orderBy('number')->get(['id','number','title']);
-        });
+        
 
 
         Route::get   ('/groups',          [GroupController::class,'index']);
@@ -283,10 +275,22 @@ Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(fun
 Route::get   ('/admin/subjects',          [SubjectController::class,'index']);
 
 
+// Публичные маршруты (без авторизации)
 Route::post('/auth/login', [LoginController::class,'login']);
-Route::middleware('auth:sanctum')->get('/auth/me', [LoginController::class,'me']);
-Route::middleware('auth:sanctum')->post('/auth/logout', [LoginController::class,'logout']);
+
+// список уровней (классов) (публичный)
+Route::get('/levels', function () {
+            return Level::orderBy('number')->get(['id','number','title']);
+        });
+
+// Регистрация студента (доступна для всех)
+Route::post('/auth/register-student-validate', [StudentRegisterWizardController::class, 'validateOnly']);
+Route::post('/auth/register-student', [StudentRegisterWizardController::class, 'createWithDocuments']);
 
 // Восстановление пароля
 Route::post('/auth/forgot-password', [\App\Http\Controllers\Auth\ForgotPasswordController::class, 'sendResetCode']);
 Route::post('/auth/reset-password', [\App\Http\Controllers\Auth\ForgotPasswordController::class, 'resetPassword']);
+
+// Защищенные маршруты авторизации
+Route::middleware('auth:sanctum')->get('/auth/me', [LoginController::class,'me']);
+Route::middleware('auth:sanctum')->post('/auth/logout', [LoginController::class,'logout']);

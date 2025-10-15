@@ -16,7 +16,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // При необходимости создайте permissions и свяжите с ролями
         // Permission::firstOrCreate(['name' => 'manage users']);
 
-        foreach (['admin','teacher','student','guardian','staff'] as $role) {
+        foreach (['admin','teacher','student','guardian','parent','staff'] as $role) {
             Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
         }
     }

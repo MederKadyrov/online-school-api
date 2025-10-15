@@ -225,6 +225,8 @@ class StructureController extends Controller
                 'assignment as has_assignment', // проверим наличие задания
                 'quiz as has_quiz',             // проверим наличие теста
             ])
+            // подгрузим статусы теста и задания для UI
+            ->with(['quiz:id,paragraph_id,status', 'assignment:id,paragraph_id,status'])
             ->orderBy('position')
             ->orderBy('number')
             ->get([
@@ -246,6 +248,8 @@ class StructureController extends Controller
                     'resources_count'  => (int) $p->resources_count,
                     'has_assignment'   => (bool) $p->has_assignment,
                     'has_quiz'         => (bool) $p->has_quiz,
+                    'quiz_status'      => optional($p->quiz)->status, // null|draft|published
+                    'assignment_status'=> optional($p->assignment)->status, // null|draft|published
                 ];
             });
 
@@ -345,4 +349,3 @@ class StructureController extends Controller
     }
 
 }
-

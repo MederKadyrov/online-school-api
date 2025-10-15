@@ -59,6 +59,7 @@ class StudentRegisterWizardController extends Controller
     {
         // Валидируем и данные, и файлы
         $data = $r->validate($this->rulesPersonal() + [
+                'student_photo'        => ['nullable','file','mimes:jpeg,jpg,png','max:4096'],
                 'guardian_application' => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
                 'birth_certificate'    => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
                 'student_pin_doc'      => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
@@ -73,6 +74,12 @@ class StudentRegisterWizardController extends Controller
                 $data['student'],
                 $data['guardian_type']
             );
+
+            // 1.5) сохраняем фото студента (если есть)
+            if ($r->hasFile('student_photo')) {
+                $photoPath = $r->file('student_photo')->store('user_photos', 'public');
+                $student->user->update(['photo' => $photoPath]);
+            }
 
             // 2) сохраняем документы (если есть)
             if ($r->hasFile(null)) { // есть любые файлы

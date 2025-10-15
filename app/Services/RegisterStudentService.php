@@ -23,7 +23,7 @@ class RegisterStudentService
 
     public function handle(array $guardianData, array $studentData, $guardianType): Student
     {
-        return DB::transaction(function () use ($guardianData, $studentData) {
+        return DB::transaction(function () use ($guardianData, $studentData, $guardianType) {
             // 1) Родитель/представитель
             $guardianUser = User::create([
                 'last_name'   => $guardianData['last_name'],
@@ -38,7 +38,12 @@ class RegisterStudentService
                 // временный пароль родителю (если логин нужен в будущем)
                 'password'    => Hash::make(Str::password(10)),
             ]);
-            $guardianUser->assignRole('guardian');
+
+            // Назначаем роль в зависимости от guardianType
+            // parent -> роль 'parent'
+            // representative -> роль 'guardian'
+            $role = $guardianType === 'parent' ? 'parent' : 'guardian';
+            $guardianUser->assignRole($role);
             $guardian = Guardian::create(['user_id' => $guardianUser->id]);
 
             // 2) Ученик
