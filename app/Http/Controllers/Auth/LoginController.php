@@ -26,17 +26,27 @@ class LoginController extends Controller
         return response()->json([
             'token' => $token,
             'user'  => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-                'pin'   => $user->pin,
+                'id'       => $user->id,
+                'name'     => $user->name,
+                'email'    => $user->email,
+                'pin'      => $user->pin,
+                'role'     => $user->getRoleNames()->first(),
+                'username' => $user->name,
             ],
         ]);
     }
 
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user();
+        return response()->json([
+            'id'       => $user->id,
+            'name'     => $user->name,
+            'email'    => $user->email,
+            'pin'      => $user->pin,
+            'role'     => $user->getRoleNames()->first(),
+            'username' => $user->name,
+        ]);
     }
 
     public function logout(Request $request)

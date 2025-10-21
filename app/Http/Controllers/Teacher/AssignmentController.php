@@ -26,12 +26,10 @@ class AssignmentController extends Controller
             'title'           => 'required|string|max:150',
             'instructions'    => 'nullable|string',
             'due_at'          => 'nullable|date',
-            'max_points'      => 'nullable|integer|min:1|max:1000',
-            'attachments_path'=> 'nullable|string',   // ⬅ добавили
+            'attachments_path'=> 'nullable|string',
             'status'          => ['nullable', Rule::in(['draft','published'])],
         ]);
         $data['paragraph_id'] = $paragraph->id;
-        $data['max_points']   = $data['max_points'] ?? 100;
         $data['status']       = $data['status'] ?? 'draft';
         return response()->json(Assignment::create($data), 201);
     }
@@ -47,8 +45,7 @@ class AssignmentController extends Controller
             'title'           => 'sometimes|required|string|max:150',
             'instructions'    => 'sometimes|nullable|string',
             'due_at'          => 'sometimes|nullable|date',
-            'max_points'      => 'sometimes|integer|min:1|max:1000',
-            'attachments_path'=> 'sometimes|nullable|string',   // ⬅ добавили
+            'attachments_path'=> 'sometimes|nullable|string',
             'status'          => ['sometimes', Rule::in(['draft','published'])],
         ]);
         $assignment->update($data);
@@ -181,15 +178,14 @@ class AssignmentController extends Controller
     public function grade(Request $r, AssignmentSubmission $submission) {
         $this->authorize('manage', $submission->assignment->paragraph->chapter->module->course);
         $data = $r->validate([
-            'score'           => 'required|numeric|min:0',
+            'grade_5'         => 'required|integer|min:2|max:5',
             'teacher_comment' => 'nullable|string|max:2000',
             'status'          => ['nullable', Rule::in(['returned','needs_fix'])],
         ]);
-        $max = $submission->assignment->max_points ?: 100;
-        $grade5 = $this->toFiveScale($data['score'], $max);
+
         $submission->update([
-            'score'          => $data['score'],
-            'grade_5'        => $grade5,
+            'score'          => null,
+            'grade_5'        => $data['grade_5'],
             'teacher_comment'=> $data['teacher_comment'] ?? null,
             'status'         => $data['status'] ?? 'returned',
         ]);
@@ -208,9 +204,9 @@ class AssignmentController extends Controller
                 [
                     'course_id' => $courseId,
                     'teacher_id' => $teacher?->id,
-                    'score' => $data['score'],
-                    'grade_5' => $grade5,
-                    'max_points' => $max,
+                    'score' => null,
+                    'grade_5' => $data['grade_5'],
+                    'max_points' => null,
                     'title' => $submission->assignment->title,
                     'teacher_comment' => $data['teacher_comment'] ?? null,
                     'graded_at' => now(),
@@ -218,7 +214,7 @@ class AssignmentController extends Controller
             );
         }
 
-        return ['message'=>'ok', 'grade_5'=>$grade5];
+        return ['message'=>'ok', 'grade_5'=>$data['grade_5']];
     }
 
     /** загрузка файла-условия к заданию (PDF/JPG/...) */

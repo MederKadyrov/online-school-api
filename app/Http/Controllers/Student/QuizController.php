@@ -166,24 +166,28 @@ class QuizController extends Controller
             $attempt->status      = $attempt->autograded ? 'graded' : 'submitted';
             $attempt->save();
 
-            // Создаем запись в таблице grades
+            // Создаем запись в таблице grades для этой попытки
             $courseId = $quiz->paragraph->chapter->module->course_id ?? null;
+            $teacherId = $quiz->paragraph->chapter->module->course->teacher_id ?? null;
+
             if ($courseId) {
-                Grade::updateOrCreate(
-                    [
-                        'student_id' => $sid,
-                        'gradeable_type' => QuizAttempt::class,
-                        'gradeable_id' => $attempt->id,
-                    ],
-                    [
-                        'course_id' => $courseId,
-                        'score' => $score,
-                        'grade_5' => $attempt->grade_5,
-                        'max_points' => $quiz->max_points,
-                        'title' => $quiz->title,
-                        'graded_at' => now(),
-                    ]
-                );
+                // Создаем новую оценку для каждой попытки (не updateOrCreate!)
+                $grade = Grade::create([
+                    'student_id' => $sid,
+                    'course_id' => $courseId,
+                    'teacher_id' => $teacherId,
+                    'gradeable_type' => QuizAttempt::class,
+                    'gradeable_id' => $attempt->id,
+                    'score' => $score,
+                    'grade_5' => $attempt->grade_5,
+                    'max_points' => $quiz->max_points,
+                    'title' => $quiz->title,
+                    'graded_at' => now(),
+                ]);
+
+                // Обновляем grade_id в попытке
+                $attempt->grade_id = $grade->id;
+                $attempt->save();
             }
         });
 

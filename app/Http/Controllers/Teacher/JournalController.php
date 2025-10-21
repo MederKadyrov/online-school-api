@@ -82,13 +82,43 @@ class JournalController extends Controller
             ->orderBy('id')
             ->get(['id', 'user_id', 'group_id']);
 
-        // Получаем все оценки для этих студентов и курса с eager loading
-        $grades = Grade::where('course_id', $courseId)
+        // Получаем все оценки для этих студентов и курса
+        // Для тестов берем только лучшую попытку каждого студента
+        $allGrades = Grade::where('course_id', $courseId)
             ->whereIn('student_id', $students->pluck('id'))
             ->get();
 
-        // Загружаем gradeable с вложенными отношениями
-        $grades->load(['gradeable']);
+        // Разделяем оценки на тесты и задания
+        $quizGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\QuizAttempt::class;
+        });
+
+        $assignmentGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\AssignmentSubmission::class;
+        });
+
+        // Загружаем gradeable для группировки
+        $quizGrades->load('gradeable');
+
+        // Группируем оценки тестов по студенту и quiz_id, берем лучшую
+        $bestQuizGrades = collect();
+        foreach ($quizGrades->groupBy('student_id') as $studentId => $studentGrades) {
+            foreach ($studentGrades->groupBy(function($grade) {
+                return $grade->gradeable->quiz_id ?? null;
+            }) as $quizId => $attempts) {
+                if ($quizId) {
+                    // Берем попытку с максимальным grade_5, если равны - с максимальным score
+                    $best = $attempts->sortByDesc(function($grade) {
+                        return $grade->grade_5 * 10000 + $grade->score;
+                    })->first();
+
+                    $bestQuizGrades->push($best);
+                }
+            }
+        }
+
+        // Объединяем лучшие оценки за тесты и все оценки за задания
+        $grades = $bestQuizGrades->merge($assignmentGrades);
 
         // Загружаем вложенные отношения для QuizAttempt
         $quizAttemptIds = $grades->filter(function($grade) {

@@ -27,6 +27,8 @@ use App\Http\Controllers\Teacher\QuizController as TQuiz;
 use App\Http\Controllers\Student\QuizController as SQuiz;
 use App\Http\Controllers\Student\CourseController as SCourse;
 use App\Http\Controllers\Student\ResourceController as SResource;
+use App\Http\Controllers\Student\ProfileController as SProfile;
+use App\Http\Controllers\Teacher\ProfileController as TProfile;
 
 
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -137,6 +139,10 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::get('/journal/modules', [\App\Http\Controllers\Admin\JournalController::class, 'modules']);
         Route::get('/journal/grades/{grade}', [\App\Http\Controllers\Admin\JournalController::class, 'gradeDetails']);
 
+        Route::get('/levels', function () {
+            return Level::orderBy('number')->get(['id','number','title']);
+        });
+
     });
 });
 
@@ -246,6 +252,10 @@ Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(fun
     Route::get('/paragraphs/{paragraph}/assignment', [TAssign::class,'byParagraph']); // получить задание параграфа (если есть)
 
     Route::get('/paragraphs/{paragraph}/quiz', [TQuiz::class,'byParagraph']);
+
+    // Профиль учителя
+    Route::get('/profile', [TProfile::class, 'show']);
+    Route::post('/change-password', [TProfile::class, 'changePassword']);
 });
 
 Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(function () {
@@ -253,6 +263,7 @@ Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(fun
     Route::get('/courses', [SCourse::class, 'index']);
     Route::get('/courses/{course}', [SCourse::class, 'show']);
 
+    Route::get('/paragraphs/{paragraph}', [\App\Http\Controllers\Student\ParagraphController::class, 'show']);
     Route::get('/paragraphs/{paragraph}/resources', [SResource::class, 'index']);
 
     Route::get ('/paragraphs/{paragraph}/assignments',   [SSubmit::class,'listForParagraph']);
@@ -270,6 +281,10 @@ Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(fun
     Route::get('/journal', [\App\Http\Controllers\Student\JournalController::class, 'index']);
     Route::get('/journal/courses', [\App\Http\Controllers\Student\JournalController::class, 'courses']);
     Route::get('/journal/modules', [\App\Http\Controllers\Student\JournalController::class, 'modules']);
+
+    // Профиль студента
+    Route::get('/profile', [SProfile::class, 'show']);
+    Route::post('/change-password', [SProfile::class, 'changePassword']);
 });
 
 Route::get   ('/admin/subjects',          [SubjectController::class,'index']);

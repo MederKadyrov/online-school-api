@@ -70,13 +70,42 @@ class JournalController extends Controller
             }
         }
 
-        // Получаем все оценки студента по курсу с eager loading
-        $grades = Grade::where('course_id', $courseId)
+        // Получаем все оценки студента по курсу
+        // Для тестов берем только лучшую попытку
+        $allGrades = Grade::where('course_id', $courseId)
             ->where('student_id', $student->id)
             ->get();
 
-        // Загружаем gradeable с вложенными отношениями
-        $grades->load(['gradeable']);
+        // Разделяем оценки на тесты и задания
+        $quizGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\QuizAttempt::class;
+        });
+
+        $assignmentGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\AssignmentSubmission::class;
+        });
+
+        // Загружаем gradeable для группировки
+        $quizGrades->load('gradeable');
+
+        // Группируем оценки тестов по quiz_id, берем лучшую
+        $bestQuizGrades = collect();
+
+        foreach ($quizGrades->groupBy(function($grade) {
+            return $grade->gradeable->quiz_id ?? null;
+        }) as $quizId => $attempts) {
+            if ($quizId) {
+                // Берем попытку с максимальным grade_5, если равны - с максимальным score
+                $best = $attempts->sortByDesc(function($grade) {
+                    return $grade->grade_5 * 10000 + $grade->score;
+                })->first();
+
+                $bestQuizGrades->push($best);
+            }
+        }
+
+        // Объединяем лучшие оценки за тесты и все оценки за задания
+        $grades = $bestQuizGrades->merge($assignmentGrades);
 
         // Загружаем вложенные отношения для QuizAttempt
         $quizAttemptIds = $grades->filter(function($grade) {

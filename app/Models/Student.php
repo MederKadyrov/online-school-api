@@ -9,7 +9,7 @@ class Student extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id','birth_date','grade','level_id', 'class_letter'];
+    protected $fillable = ['user_id','birth_date','grade','level_id', 'class_letter', 'pin', 'gender'];
 
     public function user()
     {
@@ -27,6 +27,9 @@ class Student extends Model
 
     public function group()  { return $this->belongsTo(\App\Models\Group::class); }
 
-
+    public function studentDocument()
+    {
+        return $this->hasOne(StudentDocument::class);
+    }
 
 }
