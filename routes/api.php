@@ -266,6 +266,7 @@ Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(fun
     Route::get('/paragraphs/{paragraph}', [\App\Http\Controllers\Student\ParagraphController::class, 'show']);
     Route::get('/paragraphs/{paragraph}/resources', [SResource::class, 'index']);
 
+    Route::get ('/assignments',                          [SSubmit::class,'allAssignments']);
     Route::get ('/paragraphs/{paragraph}/assignments',   [SSubmit::class,'listForParagraph']);
     Route::get ('/assignments/{assignment}/my',          [SSubmit::class,'mySubmission']);
     Route::post('/assignments/{assignment}/submit',      [SSubmit::class,'submit']); // multipart или JSON
@@ -285,6 +286,10 @@ Route::middleware(['auth:sanctum','role:student'])->prefix('student')->group(fun
     // Профиль студента
     Route::get('/profile', [SProfile::class, 'show']);
     Route::post('/change-password', [SProfile::class, 'changePassword']);
+
+    // Прогресс студента
+    Route::get('/courses/{course}/progress', [\App\Http\Controllers\Student\ProgressController::class, 'getCourseProgress']);
+    Route::post('/paragraphs/{paragraph}/progress', [\App\Http\Controllers\Student\ProgressController::class, 'updateProgress']);
 });
 
 Route::get   ('/admin/subjects',          [SubjectController::class,'index']);

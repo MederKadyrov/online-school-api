@@ -189,6 +189,13 @@ class QuizController extends Controller
                 $attempt->grade_id = $grade->id;
                 $attempt->save();
             }
+
+            // Update student progress after quiz completion
+            $paragraphId = $quiz->paragraph_id;
+            if ($paragraphId) {
+                $progressController = app(\App\Http\Controllers\Student\ProgressController::class);
+                $progressController->updateProgress($r, \App\Models\Paragraph::find($paragraphId));
+            }
         });
 
         $attempt->setAttribute('correct_count', $correct);

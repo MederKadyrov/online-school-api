@@ -19,4 +19,9 @@ class Paragraph extends Model
     {
         return $this->hasOne(Quiz::class);
     }
+
+    public function studentProgress()
+    {
+        return $this->hasMany(StudentProgress::class);
+    }
 }

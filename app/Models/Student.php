@@ -32,4 +32,9 @@ class Student extends Model
         return $this->hasOne(StudentDocument::class);
     }
 
+    public function progress()
+    {
+        return $this->hasMany(StudentProgress::class);
+    }
+
 }
