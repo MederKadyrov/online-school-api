@@ -82,6 +82,11 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         // Students (поиск/список для прикрепления)
         Route::get('/students', [\App\Http\Controllers\Admin\StudentController::class, 'index']);
 
+        // Students list (полный список с фильтрацией)
+        Route::get('/students/list', [\App\Http\Controllers\Admin\StudentController::class, 'list']);
+        Route::get('/students/{id}/details', [\App\Http\Controllers\Admin\StudentController::class, 'show']);
+        Route::get('/students/export', [\App\Http\Controllers\Admin\StudentController::class, 'export']);
+
         // Make teacher
         Route::post('/users/{user}/make-teacher', [\App\Http\Controllers\Admin\UserController::class, 'makeTeacher']);
 
@@ -138,6 +143,11 @@ Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
         Route::get('/journal/courses', [\App\Http\Controllers\Admin\JournalController::class, 'courses']);
         Route::get('/journal/modules', [\App\Http\Controllers\Admin\JournalController::class, 'modules']);
         Route::get('/journal/grades/{grade}', [\App\Http\Controllers\Admin\JournalController::class, 'gradeDetails']);
+        Route::get('/journal/export', [\App\Http\Controllers\Admin\JournalController::class, 'export']);
+
+        // Курсы (просмотр курсов учителей)
+        Route::get('/courses', [\App\Http\Controllers\Admin\CourseController::class, 'index']);
+        Route::get('/courses/{id}', [\App\Http\Controllers\Admin\CourseController::class, 'show']);
 
         Route::get('/levels', function () {
             return Level::orderBy('number')->get(['id','number','title']);

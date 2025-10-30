@@ -21,7 +21,7 @@ return new class extends Migration
             $t->timestamp('submitted_at')->nullable();
             $t->unsignedInteger('score')->nullable();
             $t->unsignedTinyInteger('grade_5')->nullable();
-            $t->enum('status',['submitted','returned','needs_fix'])->default('submitted');
+            $t->enum('status',['submitted','graded','returned','needs_fix'])->default('submitted');
             $t->text('teacher_comment')->nullable();
             $t->timestamps();
             $t->unique(['assignment_id','student_id']);

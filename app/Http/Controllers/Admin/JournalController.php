@@ -270,11 +270,21 @@ class JournalController extends Controller
     /**
      * Получить список курсов для фильтра
      */
-    public function courses()
+    public function courses(Request $request)
     {
-        $courses = Course::with(['subject:id,name', 'teacher.user:id,first_name,last_name,middle_name'])
-            ->orderBy('subject_id')
-            ->get(['id', 'subject_id', 'level_id', 'teacher_id']);
+        $groupId = $request->input('group_id');
+
+        $query = Course::with(['subject:id,name', 'teacher.user:id,first_name,last_name,middle_name'])
+            ->orderBy('subject_id');
+
+        // Фильтруем курсы по группе, если указана
+        if ($groupId) {
+            $query->whereHas('groups', function($q) use ($groupId) {
+                $q->where('groups.id', $groupId);
+            });
+        }
+
+        $courses = $query->get(['id', 'subject_id', 'level_id', 'teacher_id', 'title']);
 
         return $courses->map(function($c) {
             $teacherName = $c->teacher && $c->teacher->user
@@ -283,12 +293,13 @@ class JournalController extends Controller
                     array_slice(explode(' ', $c->teacher->user->name), 1))) . '.'
                 : '';
 
-            $title = $c->subject->name . ' ' . $c->level_id . ' kl';
+            $title = $c->title ?: ($c->subject->name . ' ' . $c->level_id . ' kl');
             $displayName = $teacherName ? "{$title} ({$teacherName})" : $title;
 
             return [
                 'id' => $c->id,
                 'display_name' => $displayName,
+                'title' => $title,
                 'subject_id' => $c->subject_id,
                 'level_id' => $c->level_id,
                 'teacher_id' => $c->teacher_id,
@@ -371,5 +382,282 @@ class JournalController extends Controller
         }
 
         return response()->json($details);
+    }
+
+    /**
+     * Экспорт журнала в CSV формат (совместим с Excel)
+     */
+    public function export(Request $request)
+    {
+        $groupId = $request->input('group_id');
+        $courseId = $request->input('course_id');
+        $moduleId = $request->input('module_id');
+
+        if (!$groupId || !$courseId) {
+            return response()->json(['message' => 'group_id и course_id обязательны'], 400);
+        }
+
+        // Получаем данные журнала (используем ту же логику что и в index)
+        $journalData = $this->getJournalData($groupId, $courseId, $moduleId);
+
+        // Получаем информацию о группе и курсе для заголовка
+        $group = Group::with('level')->find($groupId);
+        $course = Course::with(['subject', 'teacher.user'])->find($courseId);
+
+        $groupName = $group ? ($group->level->number . $group->class_letter) : '';
+        $subjectName = $course->subject->name ?? '';
+        $teacherName = $course->teacher && $course->teacher->user
+            ? $course->teacher->user->last_name . ' ' .
+              mb_substr($course->teacher->user->first_name, 0, 1) . '.' .
+              ($course->teacher->user->middle_name ? mb_substr($course->teacher->user->middle_name, 0, 1) . '.' : '')
+            : '';
+
+        // Формируем CSV
+        $filename = "journal_{$groupName}_{$subjectName}_" . date('Y-m-d') . ".csv";
+
+        $callback = function() use ($journalData, $groupName, $subjectName, $teacherName) {
+            $file = fopen('php://output', 'w');
+
+            // Устанавливаем BOM для корректного отображения кириллицы в Excel
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            // Заголовок файла
+            fputcsv($file, ["Группа: $groupName"]);
+            fputcsv($file, ["Предмет: $subjectName"]);
+            fputcsv($file, ["Преподаватель: $teacherName"]);
+            fputcsv($file, []); // Пустая строка
+
+            // Шапка таблицы - строка 1: Модули
+            $header1 = ['№', 'Студент'];
+            foreach ($journalData['modules'] as $module) {
+                $paragraphCount = count($journalData['paragraphs_by_module'][$module['module_id']] ?? []);
+                $colspan = $paragraphCount * 2 + 1; // З + Т для каждого параграфа + МО
+                $header1[] = $module['display_name'];
+                for ($i = 1; $i < $colspan; $i++) {
+                    $header1[] = ''; // Пустые ячейки для объединения
+                }
+            }
+            $header1[] = 'Средний балл';
+            fputcsv($file, $header1);
+
+            // Шапка таблицы - строка 2: Параграфы
+            $header2 = ['', ''];
+            foreach ($journalData['modules'] as $module) {
+                $paragraphs = $journalData['paragraphs_by_module'][$module['module_id']] ?? [];
+                foreach ($paragraphs as $paragraph) {
+                    // Дублируем название параграфа в обеих ячейках (З и Т)
+                    $header2[] = $paragraph['display_name'];
+                    $header2[] = $paragraph['display_name'];
+                }
+                $header2[] = 'МО';
+            }
+            $header2[] = '';
+            fputcsv($file, $header2);
+
+            // Шапка таблицы - строка 3: З/Т
+            $header3 = ['', ''];
+            foreach ($journalData['modules'] as $module) {
+                $paragraphs = $journalData['paragraphs_by_module'][$module['module_id']] ?? [];
+                foreach ($paragraphs as $paragraph) {
+                    $header3[] = 'З';
+                    $header3[] = 'Т';
+                }
+                $header3[] = '';
+            }
+            $header3[] = '';
+            fputcsv($file, $header3);
+
+            // Данные студентов
+            foreach ($journalData['students'] as $index => $student) {
+                $row = [$index + 1, $student['student_name']];
+
+                foreach ($journalData['modules'] as $module) {
+                    $paragraphs = $journalData['paragraphs_by_module'][$module['module_id']] ?? [];
+                    foreach ($paragraphs as $paragraph) {
+                        $assignmentGrade = $student['grades'][$paragraph['paragraph_id']]['assignment'] ?? '';
+                        $quizGrade = $student['grades'][$paragraph['paragraph_id']]['quiz'] ?? '';
+                        $row[] = $assignmentGrade;
+                        $row[] = $quizGrade;
+                    }
+                    $row[] = $student['module_grades'][$module['module_id']] ?? '';
+                }
+
+                $row[] = number_format($student['average_grade'] ?? 0, 2);
+                fputcsv($file, $row);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
+    /**
+     * Вспомогательный метод для получения данных журнала
+     */
+    private function getJournalData($groupId, $courseId, $moduleId)
+    {
+        $course = Course::with([
+            'modules' => function($q) use ($moduleId) {
+                if ($moduleId && $moduleId !== 'all') {
+                    $q->where('id', $moduleId);
+                }
+                $q->orderBy('number');
+            },
+            'modules.chapters' => function($q) {
+                $q->orderBy('number');
+            },
+            'modules.chapters.paragraphs' => function($q) {
+                $q->orderBy('number');
+            }
+        ])->findOrFail($courseId);
+
+        $paragraphStructure = [];
+        $moduleStructure = [];
+        $paragraphsByModule = [];
+
+        foreach ($course->modules as $module) {
+            $moduleStructure[] = [
+                'module_id' => $module->id,
+                'module_number' => $module->number,
+                'display_name' => "М{$module->number} → {$module->title}",
+            ];
+
+            $paragraphsByModule[$module->id] = [];
+
+            foreach ($module->chapters as $chapter) {
+                foreach ($chapter->paragraphs as $paragraph) {
+                    $displayName = "{$chapter->number}.{$paragraph->number}";
+
+                    $paragraphStructure[] = [
+                        'paragraph_id' => $paragraph->id,
+                        'module_id' => $module->id,
+                        'chapter_number' => $chapter->number,
+                        'paragraph_number' => $paragraph->number,
+                        'display_name' => $displayName,
+                        'title' => $paragraph->title,
+                    ];
+
+                    $paragraphsByModule[$module->id][] = [
+                        'paragraph_id' => $paragraph->id,
+                        'display_name' => $displayName,
+                        'title' => $paragraph->title,
+                    ];
+                }
+            }
+        }
+
+        $students = Student::where('group_id', $groupId)
+            ->with('user:id,first_name,last_name,middle_name')
+            ->get();
+
+        $paragraphIds = collect($paragraphStructure)->pluck('paragraph_id');
+
+        $allGrades = Grade::where('course_id', $courseId)
+            ->whereIn('student_id', $students->pluck('id'))
+            ->get();
+
+        $quizGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\QuizAttempt::class;
+        });
+
+        $assignmentGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\AssignmentSubmission::class;
+        });
+
+        // Загружаем gradeable для обеих коллекций до merge
+        $quizGrades->load('gradeable');
+        $assignmentGrades->load('gradeable');
+
+        $bestQuizGrades = collect();
+        foreach ($quizGrades->groupBy('student_id') as $studentId => $studentGrades) {
+            foreach ($studentGrades->groupBy(function($grade) {
+                return $grade->gradeable->quiz_id ?? null;
+            }) as $quizId => $attempts) {
+                if ($quizId) {
+                    $best = $attempts->sortByDesc(function($grade) {
+                        return $grade->grade_5 * 10000 + $grade->score;
+                    })->first();
+
+                    $bestQuizGrades->push($best);
+                }
+            }
+        }
+
+        $grades = $bestQuizGrades->merge($assignmentGrades);
+
+        $gradesByStudent = $grades->groupBy('student_id');
+
+        $moduleGrades = ModuleGrade::where('course_id', $courseId)
+            ->whereIn('student_id', $students->pluck('id'))
+            ->get()
+            ->groupBy('student_id');
+
+        $studentsData = [];
+
+        foreach ($students as $student) {
+            $user = $student->user;
+            $studentName = $user ? trim("{$user->last_name} {$user->first_name} {$user->middle_name}") : 'Без имени';
+
+            $studentGrades = $gradesByStudent->get($student->id, collect());
+
+            $gradesByParagraph = [];
+            foreach ($studentGrades as $grade) {
+                $paragraphId = null;
+
+                if ($grade->gradeable_type === \App\Models\QuizAttempt::class) {
+                    $paragraphId = $grade->gradeable->quiz->paragraph_id ?? null;
+                } elseif ($grade->gradeable_type === \App\Models\AssignmentSubmission::class) {
+                    $paragraphId = $grade->gradeable->assignment->paragraph_id ?? null;
+                }
+
+                if (!$paragraphId || !$paragraphIds->contains($paragraphId)) {
+                    continue;
+                }
+
+                if (!isset($gradesByParagraph[$paragraphId])) {
+                    $gradesByParagraph[$paragraphId] = [
+                        'assignment' => null,
+                        'quiz' => null,
+                    ];
+                }
+
+                if ($grade->gradeable_type === \App\Models\QuizAttempt::class) {
+                    $gradesByParagraph[$paragraphId]['quiz'] = $grade->grade_5;
+                } else {
+                    $gradesByParagraph[$paragraphId]['assignment'] = $grade->grade_5;
+                }
+            }
+
+            $studentModuleGrades = $moduleGrades->get($student->id, collect());
+            $moduleGradesMap = [];
+            foreach ($studentModuleGrades as $mg) {
+                $moduleGradesMap[$mg->module_id] = $mg->grade_5;
+            }
+
+            $allGradeValues = $studentGrades->pluck('grade_5')->filter()->values();
+            $averageGrade = $allGradeValues->isNotEmpty() ? $allGradeValues->average() : null;
+
+            $studentsData[] = [
+                'student_id' => $student->id,
+                'student_name' => $studentName,
+                'grades' => $gradesByParagraph,
+                'module_grades' => $moduleGradesMap,
+                'average_grade' => $averageGrade,
+            ];
+        }
+
+        return [
+            'students' => $studentsData,
+            'paragraphs' => $paragraphStructure,
+            'modules' => $moduleStructure,
+            'paragraphs_by_module' => $paragraphsByModule,
+        ];
     }
 }

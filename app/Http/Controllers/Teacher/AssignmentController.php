@@ -180,14 +180,17 @@ class AssignmentController extends Controller
         $data = $r->validate([
             'grade_5'         => 'required|integer|min:2|max:5',
             'teacher_comment' => 'nullable|string|max:2000',
-            'status'          => ['nullable', Rule::in(['returned','needs_fix'])],
+            'status'          => ['nullable', Rule::in(['graded','returned','needs_fix'])],
         ]);
+
+        // Определяем статус: если не указан явно, то 'graded' (оценено)
+        $status = $data['status'] ?? 'graded';
 
         $submission->update([
             'score'          => null,
             'grade_5'        => $data['grade_5'],
             'teacher_comment'=> $data['teacher_comment'] ?? null,
-            'status'         => $data['status'] ?? 'returned',
+            'status'         => $status,
         ]);
 
         // Создаем/обновляем запись в таблице grades
@@ -195,7 +198,7 @@ class AssignmentController extends Controller
         $courseId = $submission->assignment->paragraph->chapter->module->course_id ?? null;
 
         if ($courseId) {
-            Grade::updateOrCreate(
+            $grade = Grade::updateOrCreate(
                 [
                     'student_id' => $submission->student_id,
                     'gradeable_type' => AssignmentSubmission::class,
@@ -212,9 +215,25 @@ class AssignmentController extends Controller
                     'graded_at' => now(),
                 ]
             );
+
+            // Обновляем grade_id в submission
+            $submission->grade_id = $grade->id;
+            $submission->save();
+
+            // Обновляем прогресс студента
+            $paragraphId = $submission->assignment->paragraph_id;
+            if ($paragraphId) {
+                $progressController = app(\App\Http\Controllers\Student\ProgressController::class);
+                // Создаем фейковый Request для студента
+                $fakeRequest = new Request();
+                $fakeRequest->setUserResolver(function() use ($submission) {
+                    return \App\Models\User::find($submission->student->user_id);
+                });
+                $progressController->updateProgress($fakeRequest, \App\Models\Paragraph::find($paragraphId));
+            }
         }
 
-        return ['message'=>'ok', 'grade_5'=>$data['grade_5']];
+        return ['message'=>'ok', 'grade_5'=>$data['grade_5'], 'status'=>$status];
     }
 
     /** загрузка файла-условия к заданию (PDF/JPG/...) */
