@@ -18,7 +18,8 @@ class SubmissionController extends Controller
                 'student.group:id,class_letter,level_id',
                 'student.group.level:id,number',
                 'assignment.paragraph.chapter.module.course:id,title',
-                'assignment.paragraph.chapter.module.course.teacher.user:id,last_name,first_name,middle_name'
+                'assignment.paragraph.chapter.module.course.teacher.user:id,last_name,first_name,middle_name',
+                'grade:id,gradeable_id,grade_5,teacher_comment'
             ]);
 
         // Фильтр по статусу (submitted, returned)
@@ -100,9 +101,9 @@ class SubmissionController extends Controller
                 'file_path'       => $s->file_path,
                 'text_answer'     => $s->text_answer,
                 'score'           => $s->score,
-                'grade_5'         => $s->grade_5,
+                'grade_5'         => $s->grade?->grade_5,
                 'status'          => $s->status,
-                'teacher_comment' => $s->teacher_comment,
+                'teacher_comment' => $s->grade?->teacher_comment,
             ];
         });
     }

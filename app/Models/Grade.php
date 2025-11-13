@@ -15,7 +15,6 @@ class Grade extends Model
         'teacher_id',
         'gradeable_type',
         'gradeable_id',
-        'score',
         'grade_5',
         'max_points',
         'title',
@@ -25,7 +24,6 @@ class Grade extends Model
 
     protected $casts = [
         'graded_at' => 'datetime',
-        'score' => 'decimal:2',
         'grade_5' => 'integer',
         'max_points' => 'integer'
     ];

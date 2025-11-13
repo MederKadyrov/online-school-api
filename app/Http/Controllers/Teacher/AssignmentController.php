@@ -60,7 +60,7 @@ class AssignmentController extends Controller
 
     public function submissions(Request $r, Assignment $assignment) {
         $this->authorize('manage', $assignment->paragraph->chapter->module->course);
-        $q = $assignment->submissions()->with(['student.user:id,last_name,first_name,middle_name,email,phone']);
+        $q = $assignment->submissions()->with(['student.user:id,last_name,first_name,middle_name,email,phone', 'grade:id,gradeable_id,grade_5,teacher_comment']);
         if ($r->filled('status')) $q->where('status', $r->string('status'));
         return $q->orderByDesc('id')->get()->map(function($s){
             $u = $s->student?->user;
@@ -75,9 +75,9 @@ class AssignmentController extends Controller
                 'file_path'    => $s->file_path,
                 'text_answer'  => $s->text_answer,
                 'score'        => $s->score,
-                'grade_5'      => $s->grade_5,
+                'grade_5'      => $s->grade?->grade_5,
                 'status'       => $s->status,
-                'teacher_comment'=>$s->teacher_comment,
+                'teacher_comment'=>$s->grade?->teacher_comment,
             ];
         });
     }
@@ -96,7 +96,8 @@ class AssignmentController extends Controller
                 'student.user:id,last_name,first_name,middle_name,email',
                 'student.group:id,class_letter,level_id',
                 'student.group.level:id,number',
-                'assignment.paragraph.chapter.module.course:id,title'
+                'assignment.paragraph.chapter.module.course:id,title',
+                'grade:id,gradeable_id,grade_5,teacher_comment'
             ])
             ->whereHas('assignment.paragraph.chapter.module.course', function($q) use ($courseIds) {
                 $q->whereIn('courses.id', $courseIds);
@@ -168,9 +169,9 @@ class AssignmentController extends Controller
                 'file_path'       => $s->file_path,
                 'text_answer'     => $s->text_answer,
                 'score'           => $s->score,
-                'grade_5'         => $s->grade_5,
+                'grade_5'         => $s->grade?->grade_5,
                 'status'          => $s->status,
-                'teacher_comment' => $s->teacher_comment,
+                'teacher_comment' => $s->grade?->teacher_comment,
             ];
         });
     }
@@ -186,13 +187,6 @@ class AssignmentController extends Controller
         // Определяем статус: если не указан явно, то 'graded' (оценено)
         $status = $data['status'] ?? 'graded';
 
-        $submission->update([
-            'score'          => null,
-            'grade_5'        => $data['grade_5'],
-            'teacher_comment'=> $data['teacher_comment'] ?? null,
-            'status'         => $status,
-        ]);
-
         // Создаем/обновляем запись в таблице grades
         $teacher = $r->user()->teacher;
         $courseId = $submission->assignment->paragraph->chapter->module->course_id ?? null;
@@ -207,18 +201,19 @@ class AssignmentController extends Controller
                 [
                     'course_id' => $courseId,
                     'teacher_id' => $teacher?->id,
-                    'score' => null,
                     'grade_5' => $data['grade_5'],
-                    'max_points' => null,
+                    'max_points' => $submission->assignment->max_points,
                     'title' => $submission->assignment->title,
                     'teacher_comment' => $data['teacher_comment'] ?? null,
                     'graded_at' => now(),
                 ]
             );
 
-            // Обновляем grade_id в submission
-            $submission->grade_id = $grade->id;
-            $submission->save();
+            // Обновляем grade_id и status в submission
+            $submission->update([
+                'grade_id' => $grade->id,
+                'status' => $status,
+            ]);
 
             // Обновляем прогресс студента
             $paragraphId = $submission->assignment->paragraph_id;

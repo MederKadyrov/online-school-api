@@ -15,7 +15,6 @@ class QuizAttempt extends Model
         'status',       // in_progress | submitted | graded
         'score',        // суммарный балл
         'autograded',   // bool
-        'grade_5',      // 2..5
     ];
 
     protected $casts = [
@@ -23,7 +22,6 @@ class QuizAttempt extends Model
         'finished_at'=> 'datetime',
         'score'      => 'float',
         'autograded' => 'boolean',
-        'grade_5'    => 'integer',
     ];
 
     public function quiz()

@@ -8,7 +8,9 @@ use App\Models\Student;
 use App\Models\Group;
 use App\Models\Course;
 use App\Models\Module;
-use App\Models\ModuleGrade;
+use App\Models\YearlyGrade;
+use App\Models\ExamGrade;
+use App\Models\FinalGrade;
 use Illuminate\Http\Request;
 
 class JournalController extends Controller
@@ -104,7 +106,8 @@ class JournalController extends Controller
                 if ($quizId) {
                     // Берем попытку с максимальным grade_5, если равны - с максимальным score
                     $best = $attempts->sortByDesc(function($grade) {
-                        return $grade->grade_5 * 10000 + $grade->score; // сортировка по оценке, потом по баллам
+                        $score = $grade->gradeable ? $grade->gradeable->score : 0;
+                        return $grade->grade_5 * 10000 + $score; // сортировка по оценке, потом по баллам
                     })->first();
 
                     $bestQuizGrades->push($best);
@@ -155,13 +158,21 @@ class JournalController extends Controller
 
         // Получаем модульные оценки
         $moduleIds = collect($moduleStructure)->pluck('module_id');
-        $moduleGrades = ModuleGrade::where('course_id', $courseId)
+        $moduleGrades = Grade::where('course_id', $courseId)
             ->whereIn('student_id', $students->pluck('id'))
-            ->whereIn('module_id', $moduleIds)
+            ->where('gradeable_type', Module::class)
+            ->whereIn('gradeable_id', $moduleIds)
             ->get();
 
+        // Получаем финальные оценки (годовые, экзаменационные, итоговые)
+        $finalGrades = Grade::where('course_id', $courseId)
+            ->whereIn('student_id', $students->pluck('id'))
+            ->whereIn('gradeable_type', [YearlyGrade::class, ExamGrade::class, FinalGrade::class])
+            ->get()
+            ->groupBy('student_id');
+
         // Группируем оценки по студентам и параграфам
-        $journalData = $students->map(function ($student) use ($grades, $paragraphStructure, $moduleGrades, $moduleStructure) {
+        $journalData = $students->map(function ($student) use ($grades, $paragraphStructure, $moduleGrades, $moduleStructure, $finalGrades) {
             $studentGrades = $grades->where('student_id', $student->id);
 
             // Создаем структуру оценок по параграфам
@@ -187,10 +198,12 @@ class JournalController extends Controller
                 }
 
                 if ($paragraphId && isset($gradesByParagraph[$paragraphId]) && $type) {
+                    $score = $grade->gradeable ? $grade->gradeable->score : null;
+
                     $gradesByParagraph[$paragraphId][$type] = [
                         'id' => $grade->id,
                         'grade' => $grade->grade_5,
-                        'score' => $grade->score,
+                        'score' => $score,
                         'max_points' => $grade->max_points,
                     ];
                 }
@@ -200,7 +213,7 @@ class JournalController extends Controller
             $gradesByModule = [];
             foreach ($moduleStructure as $mod) {
                 $moduleGrade = $moduleGrades->where('student_id', $student->id)
-                    ->where('module_id', $mod['module_id'])
+                    ->where('gradeable_id', $mod['module_id'])
                     ->first();
 
                 $gradesByModule[$mod['module_id']] = $moduleGrade ? [
@@ -210,11 +223,36 @@ class JournalController extends Controller
                 ] : null;
             }
 
+            // Получаем финальные оценки студента
+            $studentFinalGrades = $finalGrades->get($student->id, collect());
+
+            $yearlyGrade = $studentFinalGrades->where('gradeable_type', YearlyGrade::class)->first();
+            $examGrade = $studentFinalGrades->where('gradeable_type', ExamGrade::class)->first();
+            $finalGrade = $studentFinalGrades->where('gradeable_type', FinalGrade::class)->first();
+
             return [
                 'student_id' => $student->id,
                 'student_name' => $student->user->name,
                 'grades_by_paragraph' => $gradesByParagraph,
                 'grades_by_module' => $gradesByModule,
+                'yearly_grade' => $yearlyGrade ? [
+                    'id' => $yearlyGrade->id,
+                    'grade' => $yearlyGrade->grade_5,
+                    'graded_at' => $yearlyGrade->graded_at,
+                    'teacher_comment' => $yearlyGrade->teacher_comment,
+                ] : null,
+                'exam_grade' => $examGrade ? [
+                    'id' => $examGrade->id,
+                    'grade' => $examGrade->grade_5,
+                    'graded_at' => $examGrade->graded_at,
+                    'teacher_comment' => $examGrade->teacher_comment,
+                ] : null,
+                'final_grade' => $finalGrade ? [
+                    'id' => $finalGrade->id,
+                    'grade' => $finalGrade->grade_5,
+                    'graded_at' => $finalGrade->graded_at,
+                    'teacher_comment' => $finalGrade->teacher_comment,
+                ] : null,
                 'average' => $studentGrades->avg('grade_5'),
             ];
         });
@@ -223,6 +261,11 @@ class JournalController extends Controller
             'students' => $journalData,
             'paragraphs' => $paragraphStructure,
             'modules' => $moduleStructure,
+            'course' => [
+                'id' => $course->id,
+                'level_id' => $course->level_id,
+                'has_exam_grades' => in_array($course->level_id, [9, 11]),
+            ],
             'summary' => [
                 'total_students' => $students->count(),
                 'total_grades' => $grades->count(),
@@ -344,6 +387,8 @@ class JournalController extends Controller
         ])->findOrFail($gradeId);
 
         // Дополнительная информация в зависимости от типа
+        $score = $grade->gradeable ? $grade->gradeable->score : null;
+
         $details = [
             'id' => $grade->id,
             'student_name' => $grade->student->user->name,
@@ -351,7 +396,7 @@ class JournalController extends Controller
             'subject' => $grade->course->subject->name,
             'teacher' => $grade->teacher && $grade->teacher->user ? $grade->teacher->user->name : 'Автоматическая проверка',
             'title' => $grade->title,
-            'score' => $grade->score,
+            'score' => $score,
             'max_points' => $grade->max_points,
             'grade_5' => $grade->grade_5,
             'teacher_comment' => $grade->teacher_comment,
@@ -582,7 +627,8 @@ class JournalController extends Controller
             }) as $quizId => $attempts) {
                 if ($quizId) {
                     $best = $attempts->sortByDesc(function($grade) {
-                        return $grade->grade_5 * 10000 + $grade->score;
+                        $score = $grade->gradeable ? $grade->gradeable->score : 0;
+                        return $grade->grade_5 * 10000 + $score;
                     })->first();
 
                     $bestQuizGrades->push($best);
@@ -594,8 +640,9 @@ class JournalController extends Controller
 
         $gradesByStudent = $grades->groupBy('student_id');
 
-        $moduleGrades = ModuleGrade::where('course_id', $courseId)
+        $moduleGrades = Grade::where('course_id', $courseId)
             ->whereIn('student_id', $students->pluck('id'))
+            ->where('gradeable_type', Module::class)
             ->get()
             ->groupBy('student_id');
 
@@ -638,7 +685,7 @@ class JournalController extends Controller
             $studentModuleGrades = $moduleGrades->get($student->id, collect());
             $moduleGradesMap = [];
             foreach ($studentModuleGrades as $mg) {
-                $moduleGradesMap[$mg->module_id] = $mg->grade_5;
+                $moduleGradesMap[$mg->gradeable_id] = $mg->grade_5;
             }
 
             $allGradeValues = $studentGrades->pluck('grade_5')->filter()->values();

@@ -230,6 +230,13 @@ Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(fun
     Route::post('/journal/module-grades', [\App\Http\Controllers\Teacher\JournalController::class, 'storeModuleGrade']);
     Route::delete('/journal/module-grades/{id}', [\App\Http\Controllers\Teacher\JournalController::class, 'deleteModuleGrade']);
 
+    // Финальные оценки (годовые, экзаменационные, итоговые)
+    Route::get('/courses/{course}/final-grades', [\App\Http\Controllers\Teacher\CourseGradeController::class, 'index']);
+    Route::post('/courses/{course}/yearly-grade', [\App\Http\Controllers\Teacher\CourseGradeController::class, 'storeYearlyGrade']);
+    Route::post('/courses/{course}/exam-grade', [\App\Http\Controllers\Teacher\CourseGradeController::class, 'storeExamGrade']);
+    Route::post('/courses/{course}/final-grade', [\App\Http\Controllers\Teacher\CourseGradeController::class, 'storeFinalGrade']);
+    Route::delete('/final-grades/{grade}', [\App\Http\Controllers\Teacher\CourseGradeController::class, 'destroy']);
+
     //    Задания
     Route::post('/paragraphs/{paragraph}/assignments',   [TAssign::class,'store']);
     Route::get ('/assignments/{assignment}',             [TAssign::class,'show']);

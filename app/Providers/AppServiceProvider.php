@@ -19,8 +19,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Регистрация Observers для автосинхронизации оценок
-        \App\Models\QuizAttempt::observe(\App\Observers\QuizAttemptObserver::class);
+        // Регистрация Observers
+        // QuizAttemptObserver удален - создание оценок происходит напрямую в QuizController::finish()
         \App\Models\AssignmentSubmission::observe(\App\Observers\AssignmentSubmissionObserver::class);
     }
 }

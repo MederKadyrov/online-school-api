@@ -13,6 +13,7 @@ class StudentDocument extends Model
         'student_pin_doc_path',
         'guardian_passport_path',
         'medical_certificate_path',
+        'previous_school_record_path',
     ];
 
     public function student() { return $this->belongsTo(Student::class); }

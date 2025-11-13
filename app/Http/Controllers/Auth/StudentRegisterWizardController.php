@@ -59,12 +59,13 @@ class StudentRegisterWizardController extends Controller
     {
         // Валидируем и данные, и файлы
         $data = $r->validate($this->rulesPersonal() + [
-                'student_photo'        => ['nullable','file','mimes:jpeg,jpg,png','max:4096'],
-                'guardian_application' => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
-                'birth_certificate'    => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
-                'student_pin_doc'      => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
-                'guardian_passport'    => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
-                'medical_certificate'  => ['nullable','file','mimes:jpeg,jpg,pdf','max:8192'],
+                'student_photo'           => ['nullable','file','mimes:jpeg,jpg,png','max:4096'],
+                'guardian_application'    => ['required','file','mimes:jpeg,jpg,pdf','max:8192'],
+                'birth_certificate'       => ['required','file','mimes:jpeg,jpg,pdf','max:8192'],
+                'student_pin_doc'         => ['required','file','mimes:jpeg,jpg,pdf','max:8192'],
+                'guardian_passport'       => ['required','file','mimes:jpeg,jpg,pdf','max:8192'],
+                'medical_certificate'     => ['required','file','mimes:jpeg,jpg,pdf','max:8192'],
+                'previous_school_record'  => ['required','file','mimes:jpeg,jpg,pdf','max:8192'],
             ]);
 
         $student = DB::transaction(function () use ($data, $service, $r) {
@@ -86,11 +87,12 @@ class StudentRegisterWizardController extends Controller
                 $doc = StudentDocument::firstOrCreate(['student_id' => $student->id]);
                 $dir = "student_docs/{$student->id}";
                 $map = [
-                    'guardian_application' => 'guardian_application_path',
-                    'birth_certificate'    => 'birth_certificate_path',
-                    'student_pin_doc'      => 'student_pin_doc_path',
-                    'guardian_passport'    => 'guardian_passport_path',
-                    'medical_certificate'  => 'medical_certificate_path',
+                    'guardian_application'   => 'guardian_application_path',
+                    'birth_certificate'      => 'birth_certificate_path',
+                    'student_pin_doc'        => 'student_pin_doc_path',
+                    'guardian_passport'      => 'guardian_passport_path',
+                    'medical_certificate'    => 'medical_certificate_path',
+                    'previous_school_record' => 'previous_school_record_path',
                 ];
                 foreach ($map as $input => $column) {
                     if ($r->hasFile($input)) {

@@ -127,7 +127,7 @@ class QuizController extends Controller
         $wrong = 0;
         $unanswered = 0;
 
-        DB::transaction(function() use ($attempt, $quiz, $answers, &$correct, &$wrong, &$unanswered, $sid) {
+        DB::transaction(function() use ($r, $attempt, $quiz, $answers, &$correct, &$wrong, &$unanswered, $sid) {
             $score = 0;
 
             foreach ($quiz->questions as $q) {
@@ -162,7 +162,6 @@ class QuizController extends Controller
             $attempt->score       = $score;
             $attempt->finished_at = now();
             $attempt->autograded  = ($quiz->questions->where('type','text')->count()===0);
-            $attempt->grade_5     = $this->toFiveScale($score, max(1, $quiz->max_points));
             $attempt->status      = $attempt->autograded ? 'graded' : 'submitted';
             $attempt->save();
 
@@ -171,6 +170,9 @@ class QuizController extends Controller
             $teacherId = $quiz->paragraph->chapter->module->course->teacher_id ?? null;
 
             if ($courseId) {
+                // Вычисляем оценку по 5-бальной шкале
+                $grade5 = $this->toFiveScale($score, max(1, $quiz->max_points));
+
                 // Создаем новую оценку для каждой попытки (не updateOrCreate!)
                 $grade = Grade::create([
                     'student_id' => $sid,
@@ -178,8 +180,7 @@ class QuizController extends Controller
                     'teacher_id' => $teacherId,
                     'gradeable_type' => QuizAttempt::class,
                     'gradeable_id' => $attempt->id,
-                    'score' => $score,
-                    'grade_5' => $attempt->grade_5,
+                    'grade_5' => $grade5,
                     'max_points' => $quiz->max_points,
                     'title' => $quiz->title,
                     'graded_at' => now(),
