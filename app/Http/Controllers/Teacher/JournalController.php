@@ -495,6 +495,225 @@ class JournalController extends Controller
     }
 
     /**
+     * Экспорт журнала в CSV
+     * GET /api/teacher/journal/export
+     */
+    public function export(Request $request)
+    {
+        $teacher = Teacher::where('user_id', $request->user()->id)->firstOrFail();
+
+        $groupId = $request->input('group_id');
+        $courseId = $request->input('course_id');
+        $moduleId = $request->input('module_id');
+
+        if (!$groupId || !$courseId) {
+            return response()->json(['message' => 'group_id и course_id обязательны'], 400);
+        }
+
+        // Проверяем, что курс принадлежит этому учителю
+        $course = Course::where('id', $courseId)
+            ->where('teacher_id', $teacher->id)
+            ->with([
+                'modules' => function($q) use ($moduleId) {
+                    if ($moduleId && $moduleId !== 'all') {
+                        $q->where('id', $moduleId);
+                    }
+                    $q->orderBy('number');
+                },
+                'modules.chapters.paragraphs',
+                'subject:id,name',
+                'level:id,number'
+            ])->firstOrFail();
+
+        $group = Group::with('level:id,number')->findOrFail($groupId);
+
+        // Получаем студентов группы
+        $students = Student::where('group_id', $groupId)
+            ->with('user:id,first_name,last_name,middle_name')
+            ->orderBy('id')
+            ->get();
+
+        // Строим структуру параграфов
+        $paragraphStructure = [];
+        $moduleStructure = [];
+
+        foreach ($course->modules as $module) {
+            $moduleStructure[] = [
+                'module_id' => $module->id,
+                'module_number' => $module->number,
+                'display_name' => 'М' . $this->getRomanNumeral($module->number),
+            ];
+
+            foreach ($module->chapters as $chapter) {
+                foreach ($chapter->paragraphs as $paragraph) {
+                    $paragraphStructure[] = [
+                        'paragraph_id' => $paragraph->id,
+                        'module_id' => $module->id,
+                        'module_number' => $module->number,
+                        'chapter_number' => $chapter->number,
+                        'paragraph_number' => $paragraph->number,
+                        'display_name' => $this->getRomanNumeral($module->number) . '.' .
+                                        $chapter->number . '.' .
+                                        $paragraph->number,
+                    ];
+                }
+            }
+        }
+
+        // Получаем все оценки
+        $allGrades = Grade::where('course_id', $courseId)
+            ->whereIn('student_id', $students->pluck('id'))
+            ->get();
+
+        $quizGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\QuizAttempt::class;
+        });
+
+        $assignmentGrades = $allGrades->filter(function($grade) {
+            return $grade->gradeable_type === \App\Models\AssignmentSubmission::class;
+        });
+
+        $quizGrades->load('gradeable.quiz');
+
+        // Группируем оценки тестов по quiz_id, берем лучшую
+        $bestQuizGrades = collect();
+        foreach ($quizGrades->groupBy('student_id') as $studentId => $studentGrades) {
+            foreach ($studentGrades->groupBy(function($grade) {
+                return $grade->gradeable->quiz_id ?? null;
+            }) as $quizId => $attempts) {
+                if ($quizId) {
+                    $best = $attempts->sortByDesc(function($grade) {
+                        $score = $grade->gradeable ? $grade->gradeable->score : 0;
+                        return $grade->grade_5 * 10000 + $score;
+                    })->first();
+                    $bestQuizGrades->push($best);
+                }
+            }
+        }
+
+        $grades = $bestQuizGrades->merge($assignmentGrades);
+        $assignmentGrades->load('gradeable.assignment');
+
+        // Получаем модульные оценки
+        $moduleIds = collect($moduleStructure)->pluck('module_id');
+        $moduleGrades = Grade::where('course_id', $courseId)
+            ->whereIn('student_id', $students->pluck('id'))
+            ->where('gradeable_type', Module::class)
+            ->whereIn('gradeable_id', $moduleIds)
+            ->get();
+
+        // Получаем финальные оценки
+        $finalGrades = Grade::where('course_id', $courseId)
+            ->whereIn('student_id', $students->pluck('id'))
+            ->whereIn('gradeable_type', [YearlyGrade::class, ExamGrade::class, FinalGrade::class])
+            ->get()
+            ->groupBy('student_id');
+
+        // Формируем CSV
+        $csv = [];
+
+        // Заголовок
+        $header = ['№', 'Студент'];
+        foreach ($paragraphStructure as $para) {
+            $header[] = $para['display_name'] . ' (З)';
+            $header[] = $para['display_name'] . ' (Т)';
+        }
+        foreach ($moduleStructure as $mod) {
+            $header[] = $mod['display_name'] . ' (МО)';
+        }
+        $header[] = 'Средний балл';
+        $header[] = 'Годовая';
+        if (in_array($course->level_id, [9, 11])) {
+            $header[] = 'Экзамен';
+            $header[] = 'Итоговая';
+        }
+
+        $csv[] = $header;
+
+        // Данные студентов
+        foreach ($students as $index => $student) {
+            $row = [$index + 1, $student->user->name];
+
+            $studentGrades = $grades->where('student_id', $student->id);
+
+            // Оценки по параграфам
+            foreach ($paragraphStructure as $para) {
+                $assignmentGrade = null;
+                $quizGrade = null;
+
+                foreach ($studentGrades as $grade) {
+                    $paragraphId = null;
+
+                    if ($grade->gradeable instanceof \App\Models\QuizAttempt && $grade->gradeable->quiz) {
+                        $paragraphId = $grade->gradeable->quiz->paragraph_id;
+                        if ($paragraphId == $para['paragraph_id']) {
+                            $quizGrade = $grade->grade_5;
+                        }
+                    } elseif ($grade->gradeable instanceof \App\Models\AssignmentSubmission && $grade->gradeable->assignment) {
+                        $paragraphId = $grade->gradeable->assignment->paragraph_id;
+                        if ($paragraphId == $para['paragraph_id']) {
+                            $assignmentGrade = $grade->grade_5;
+                        }
+                    }
+                }
+
+                $row[] = $assignmentGrade ?? '';
+                $row[] = $quizGrade ?? '';
+            }
+
+            // Модульные оценки
+            foreach ($moduleStructure as $mod) {
+                $moduleGrade = $moduleGrades->where('student_id', $student->id)
+                    ->where('gradeable_id', $mod['module_id'])
+                    ->first();
+                $row[] = $moduleGrade ? $moduleGrade->grade_5 : '';
+            }
+
+            // Средний балл
+            $row[] = $studentGrades->avg('grade_5') ? number_format($studentGrades->avg('grade_5'), 2) : '';
+
+            // Финальные оценки
+            $studentFinalGrades = $finalGrades->get($student->id, collect());
+            $yearlyGrade = $studentFinalGrades->where('gradeable_type', YearlyGrade::class)->first();
+            $examGrade = $studentFinalGrades->where('gradeable_type', ExamGrade::class)->first();
+            $finalGrade = $studentFinalGrades->where('gradeable_type', FinalGrade::class)->first();
+
+            $row[] = $yearlyGrade ? $yearlyGrade->grade_5 : '';
+            if (in_array($course->level_id, [9, 11])) {
+                $row[] = $examGrade ? $examGrade->grade_5 : '';
+                $row[] = $finalGrade ? $finalGrade->grade_5 : '';
+            }
+
+            $csv[] = $row;
+        }
+
+        // Генерируем CSV файл
+        $filename = sprintf(
+            'journal_%s_%s_%s.csv',
+            $course->subject->name,
+            $group->display_name,
+            date('Y-m-d')
+        );
+
+        $handle = fopen('php://temp', 'r+');
+
+        // Добавляем BOM для правильной кодировки в Excel
+        fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+        foreach ($csv as $row) {
+            fputcsv($handle, $row, ';');
+        }
+
+        rewind($handle);
+        $content = stream_get_contents($handle);
+        fclose($handle);
+
+        return response($content, 200)
+            ->header('Content-Type', 'text/csv; charset=UTF-8')
+            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    /**
      * Конвертировать число в римское
      */
     private function getRomanNumeral($number)

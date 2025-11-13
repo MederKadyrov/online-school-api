@@ -227,6 +227,7 @@ Route::middleware(['auth:sanctum','role:teacher'])->prefix('teacher')->group(fun
     Route::get('/journal/courses', [\App\Http\Controllers\Teacher\JournalController::class, 'courses']);
     Route::get('/journal/modules', [\App\Http\Controllers\Teacher\JournalController::class, 'modules']);
     Route::get('/journal/grades/{grade}', [\App\Http\Controllers\Teacher\JournalController::class, 'gradeDetails']);
+    Route::get('/journal/export', [\App\Http\Controllers\Teacher\JournalController::class, 'export']);
     Route::post('/journal/module-grades', [\App\Http\Controllers\Teacher\JournalController::class, 'storeModuleGrade']);
     Route::delete('/journal/module-grades/{id}', [\App\Http\Controllers\Teacher\JournalController::class, 'deleteModuleGrade']);
 
