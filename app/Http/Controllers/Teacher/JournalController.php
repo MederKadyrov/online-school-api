@@ -311,9 +311,18 @@ class JournalController extends Controller
     public function courses(Request $request)
     {
         $teacher = Teacher::where('user_id', $request->user()->id)->firstOrFail();
+        $groupId = $request->input('group_id');
 
-        $courses = Course::where('teacher_id', $teacher->id)
-            ->with(['subject:id,name', 'teacher.user:id,first_name,last_name,middle_name'])
+        $query = Course::where('teacher_id', $teacher->id);
+
+        // Если указан group_id, фильтруем курсы по группе
+        if ($groupId) {
+            $query->whereHas('groups', function($q) use ($groupId) {
+                $q->where('groups.id', $groupId);
+            });
+        }
+
+        $courses = $query->with(['subject:id,name', 'teacher.user:id,first_name,last_name,middle_name'])
             ->orderBy('subject_id')
             ->get(['id', 'subject_id', 'level_id', 'teacher_id']);
 
